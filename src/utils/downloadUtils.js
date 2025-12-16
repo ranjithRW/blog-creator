@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, ImageRun, ExternalHyperlink, WidthType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 
@@ -26,19 +26,7 @@ const isHeading = (text) => {
   return cleaned.startsWith('#') || (cleaned.length < 100 && cleaned.split(' ').length < 15);
 };
 
-// Helper function to fetch image as blob
-const fetchImageAsBlob = async (url) => {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return blob;
-  } catch (error) {
-    console.error('Error fetching image:', error);
-    return null;
-  }
-};
-
-export const downloadAsWord = async (content, topic, images = []) => {
+export const downloadAsWord = async (content, topic) => {
   try {
     // Split by all heading levels (##, ###, ####, etc.) while preserving the headings
     const sections = content.split(/(\n#{2,6}\s+[^\n]+)/);
@@ -64,12 +52,6 @@ export const downloadAsWord = async (content, topic, images = []) => {
           headingLevelType = HeadingLevel.HEADING_5;
         } else {
           headingLevelType = HeadingLevel.HEADING_6;
-        }
-        
-        // Only check for images on main section headings (##)
-        if (headingLevel === 2) {
-          const image = images.find(img => img.sectionIndex === sectionIndex);
-          sectionIndex++;
         }
         
         // All headings should be bold (handled by HeadingLevel styles)
@@ -137,36 +119,6 @@ export const downloadAsWord = async (content, topic, images = []) => {
       }
     });
 
-    // Add images after their corresponding sections
-    // Note: docx library requires images to be added separately
-    // For now, we'll add image placeholders with links
-    const finalParagraphs = [...docParagraphs];
-    
-    // Insert images after headings (simplified approach)
-    images.forEach((image, idx) => {
-      const insertIndex = (image.sectionIndex * 2) + 1;
-      if (insertIndex < finalParagraphs.length) {
-        // Add image reference as hyperlink (docx image embedding is complex)
-        finalParagraphs.splice(insertIndex, 0, 
-          new Paragraph({
-            children: [
-              new ExternalHyperlink({
-                children: [
-                  new TextRun({
-                    text: `[Image: ${image.description}]`,
-                    style: "Hyperlink",
-                  }),
-                ],
-                link: image.url,
-              }),
-            ],
-            spacing: { after: 200 },
-            alignment: AlignmentType.CENTER,
-          })
-        );
-      }
-    });
-
     const doc = new Document({
       sections: [
         {
@@ -178,7 +130,7 @@ export const downloadAsWord = async (content, topic, images = []) => {
               alignment: AlignmentType.CENTER,
               spacing: { after: 400 },
             }),
-            ...finalParagraphs,
+            ...docParagraphs,
           ],
         },
       ],
@@ -192,7 +144,7 @@ export const downloadAsWord = async (content, topic, images = []) => {
   }
 };
 
-export const downloadAsPDF = async (content, topic, images = []) => {
+export const downloadAsPDF = async (content, topic) => {
   try {
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -210,7 +162,6 @@ export const downloadAsPDF = async (content, topic, images = []) => {
 
     // Parse content with sections - handle all heading levels (##, ###, ####, etc.)
     const sections = content.split(/(\n#{2,6}\s+[^\n]+)/);
-    let sectionIndex = 0;
 
     sections.forEach((section) => {
       // Check if this is a heading (##, ###, ####, etc.)
@@ -240,31 +191,6 @@ export const downloadAsPDF = async (content, topic, images = []) => {
         const headingLines = pdf.splitTextToSize(headingText, maxWidth);
         pdf.text(headingLines, margin, yPosition);
         yPosition += headingLines.length * (headingLevel === 2 ? 8 : 7) + 10;
-        
-        // Check if there's an image for this section (only for main headings ##)
-        if (headingLevel === 2) {
-          const image = images.find(img => img.sectionIndex === sectionIndex);
-          sectionIndex++;
-          
-          if (image) {
-            try {
-              // Add image to PDF
-              const imgWidth = maxWidth;
-              const imgHeight = (imgWidth * 0.75); // Maintain aspect ratio
-              
-              if (yPosition + imgHeight > pageHeight - margin) {
-                pdf.addPage();
-                yPosition = margin;
-              }
-              
-              pdf.addImage(image.url, 'JPEG', margin, yPosition, imgWidth, imgHeight);
-              yPosition += imgHeight + 10;
-            } catch (error) {
-              console.error('Error adding image to PDF:', error);
-              // Continue without image if it fails
-            }
-          }
-        }
         
         // Reset to normal font for body text
         pdf.setFontSize(12);

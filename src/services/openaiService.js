@@ -3,70 +3,6 @@ import axios from 'axios';
 const API_BASE_URL = 'https://api.openai.com/v1';
 
 const openaiService = {
-  async generateImage(prompt, apiKey) {
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/images/generations`,
-        {
-          model: 'dall-e-3',
-          prompt: prompt,
-          n: 1,
-          size: '1024x1024',
-          quality: 'standard',
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data.data[0].url;
-    } catch (error) {
-      console.error('Error generating image:', error);
-      return null;
-    }
-  },
-
-  async generateImagesForBlog(content, topic, apiKey, pageCount) {
-    try {
-      // Extract main sections from the blog content (sections with ## headings)
-      const sectionMatches = content.matchAll(/##\s+([^\n]+)/g);
-      const sections = Array.from(sectionMatches).map(match => match[1]);
-      const images = [];
-      
-      // Generate images for key sections (1-2 images per page, max 10 images)
-      const maxImages = Math.min(Math.max(pageCount, 2), 10);
-      const sectionsToImage = sections.slice(0, maxImages);
-      
-      for (let i = 0; i < sectionsToImage.length; i++) {
-        const sectionHeading = sectionsToImage[i];
-        // Create image prompt based on section heading and topic
-        const imagePrompt = `Professional, high-quality illustration related to "${sectionHeading}" in the context of "${topic}". Modern, clean, and visually appealing style suitable for a blog article. No text in the image.`;
-        
-        try {
-          const imageUrl = await this.generateImage(imagePrompt, apiKey);
-          if (imageUrl) {
-            images.push({
-              sectionIndex: i,
-              url: imageUrl,
-              description: sectionHeading.substring(0, 100)
-            });
-          }
-          // Add small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } catch (error) {
-          console.error(`Error generating image for section ${i}:`, error);
-          // Continue with other sections even if one fails
-        }
-      }
-      
-      return images;
-    } catch (error) {
-      console.error('Error generating images:', error);
-      return [];
-    }
-  },
   async generateBlog(topic, pageCount) {
     try {
       const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
@@ -184,13 +120,9 @@ Word count target: ${targetWords} words minimum`;
         content = content + '\n\n' + extendResponse.data.choices[0].message.content;
       }
 
-      // Generate images for the blog
-      const images = await this.generateImagesForBlog(content, topic, apiKey, pageCount);
-      
-      // Return content with image metadata
+      // Return content
       return {
-        content: content,
-        images: images
+        content: content
       };
     } catch (error) {
       console.error('Error generating blog:', error);
@@ -316,12 +248,8 @@ Target: ${wordsPerSection} words`;
     
     fullContent += conclusionResponse.data.choices[0].message.content;
     
-    // Generate images for the long blog
-    const images = await this.generateImagesForBlog(fullContent, topic, apiKey, pageCount);
-    
     return {
-      content: fullContent,
-      images: images
+      content: fullContent
     };
   },
 };

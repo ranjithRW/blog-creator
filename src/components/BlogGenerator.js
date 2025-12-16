@@ -7,7 +7,6 @@ const BlogGenerator = () => {
   const [topic, setTopic] = useState('');
   const [pageCount, setPageCount] = useState(1);
   const [blogContent, setBlogContent] = useState('');
-  const [blogImages, setBlogImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,12 +24,10 @@ const BlogGenerator = () => {
     setLoading(true);
     setError('');
     setBlogContent('');
-    setBlogImages([]);
 
     try {
       const result = await openaiService.generateBlog(topic.trim(), pageCount);
       setBlogContent(result.content);
-      setBlogImages(result.images || []);
     } catch (err) {
       setError(err.message || 'Failed to generate blog. Please try again.');
     } finally {
@@ -41,7 +38,7 @@ const BlogGenerator = () => {
   const handleDownloadWord = async () => {
     if (!blogContent) return;
     try {
-      await downloadAsWord(blogContent, topic, blogImages);
+      await downloadAsWord(blogContent, topic);
     } catch (err) {
       setError('Failed to download Word document: ' + err.message);
     }
@@ -50,19 +47,18 @@ const BlogGenerator = () => {
   const handleDownloadPDF = async () => {
     if (!blogContent) return;
     try {
-      await downloadAsPDF(blogContent, topic, blogImages);
+      await downloadAsPDF(blogContent, topic);
     } catch (err) {
       setError('Failed to download PDF document: ' + err.message);
     }
   };
 
-  // Render blog content with images
-  const renderBlogWithImages = () => {
+  // Render blog content
+  const renderBlogContent = () => {
     if (!blogContent) return null;
     
     // Split content by all heading levels (##, ###, ####, etc.)
     const parts = blogContent.split(/(\n#{2,6}\s+[^\n]+)/);
-    let sectionIndex = 0;
     const elements = [];
     
     for (let i = 0; i < parts.length; i++) {
@@ -74,27 +70,12 @@ const BlogGenerator = () => {
         const headingLevel = headingMatch[1].length; // Number of # symbols
         const headingText = headingMatch[2].trim();
         
-        // Only check for images on main section headings (##)
+        // Main section headings (##)
         if (headingLevel === 2) {
-          const image = blogImages.find(img => img.sectionIndex === sectionIndex);
-          sectionIndex++;
-          
           elements.push(
-            <div key={`section-${sectionIndex - 1}`}>
-              {image && (
-                <div className="blog-image-container">
-                  <img 
-                    src={image.url} 
-                    alt={image.description}
-                    className="blog-image"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-              <h2 className="blog-section-heading">{headingText}</h2>
-            </div>
+            <h2 key={`heading-${i}`} className="blog-section-heading">
+              {headingText}
+            </h2>
           );
         } else {
           // Subheadings (###, ####, etc.) - use appropriate heading tag
@@ -213,7 +194,7 @@ const BlogGenerator = () => {
               </div>
             </div>
             <div className="blog-content">
-              {renderBlogWithImages()}
+              {renderBlogContent()}
             </div>
           </div>
         )}
@@ -221,7 +202,7 @@ const BlogGenerator = () => {
         {loading && (
           <div className="loading">
             <div className="spinner"></div>
-            <p>Generating your blog with images... This may take a moment.</p>
+            <p>Generating your blog... This may take a moment.</p>
           </div>
         )}
       </div>
