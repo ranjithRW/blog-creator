@@ -105,11 +105,13 @@ CRITICAL REQUIREMENTS:
 - Ensure the content is substantial and fills ${pageCount} complete pages
 
 Structure the blog with:
-- An engaging introduction (10-15% of content)
-- Multiple detailed sections with clear subheadings (70-80% of content)
+- An engaging introduction with ## Introduction heading (10-15% of content)
+- Multiple detailed sections with clear headings using ## for main sections (like ## What is..., ## Benefits of..., ## How to..., etc.)
+- Use ### for subtitles/subheadings within sections
 - Each section should be comprehensive with examples, insights, and detailed explanations
-- A compelling conclusion (10-15% of content)
-- Use markdown formatting for headings (## for main sections, ### for subsections), lists, and emphasis
+- A compelling conclusion with ## Conclusion heading (10-15% of content)
+- Use markdown formatting ONLY for headings: ## for main section headings (Introduction, Conclusion, and all major sections), ### for subtitles/subheadings
+- IMPORTANT: Body paragraphs and regular text must be plain text with NO bold markdown (**text**). Do NOT use **bold** or *italic* in body paragraphs. Only headings should use markdown formatting (## and ###). All body content should be in normal, regular font weight. All headings will automatically be bold in the output.
 
 Topic: ${topic}
 Required length: EXACTLY ${targetWords} words (${pageCount} pages)
@@ -127,7 +129,7 @@ Word count target: ${targetWords} words minimum`;
           messages: [
             {
               role: 'system',
-              content: `You are a professional blog writer who creates detailed, well-structured, and engaging blog posts. You are meticulous about meeting exact word count requirements. When asked for ${targetWords} words, you MUST deliver exactly that amount of content.`
+              content: `You are a professional blog writer who creates detailed, well-structured, and engaging blog posts. You are meticulous about meeting exact word count requirements. When asked for ${targetWords} words, you MUST deliver exactly that amount of content. IMPORTANT: Use markdown formatting ONLY for headings (## or ###). Body paragraphs must be plain text without any bold (**text**) or italic (*text*) markdown formatting. Only headings should have markdown formatting.`
             },
             {
               role: 'user',
@@ -244,7 +246,8 @@ Word count target: ${targetWords} words minimum`;
       const sectionPrompt = `Write section ${i} of ${totalSections} for a comprehensive blog post about "${topic}". 
       
 This section should be approximately ${wordsPerSection} words and cover a specific aspect of the topic. 
-Make it detailed and informative. Use markdown formatting with ## for the section heading.
+Make it detailed and informative. Use markdown formatting ONLY for the section heading (## for the heading).
+IMPORTANT: Body paragraphs must be plain text with NO bold markdown (**text**). Only the heading should use markdown. All body content should be in normal, regular font weight.
 
 Topic: ${topic}
 Section ${i} of ${totalSections}
@@ -258,7 +261,7 @@ Target: ${wordsPerSection} words`;
             messages: [
               {
                 role: 'system',
-                content: 'You are a professional blog writer creating detailed sections for a comprehensive blog post.'
+                content: 'You are a professional blog writer creating detailed sections for a comprehensive blog post. Use markdown formatting ONLY for headings (##). Body paragraphs must be plain text without bold (**text**) or italic (*text*) markdown formatting.'
               },
               {
                 role: 'user',

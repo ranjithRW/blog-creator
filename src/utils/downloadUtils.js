@@ -3,12 +3,15 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 
 // Convert markdown-like text to plain text for Word/PDF
+// Remove all markdown formatting to ensure clean, normal-weight text
 const cleanText = (text) => {
   return text
     .replace(/#{1,6}\s+/g, '') // Remove markdown headers
-    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
-    .replace(/\*(.*?)\*/g, '$1') // Remove italic
-    .replace(/`(.*?)`/g, '$1') // Remove code
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown (**text**)
+    .replace(/\*(.*?)\*/g, '$1') // Remove italic markdown (*text*)
+    .replace(/`(.*?)`/g, '$1') // Remove code markdown
+    .replace(/__(.*?)__/g, '$1') // Remove bold underscore markdown
+    .replace(/_(.*?)_/g, '$1') // Remove italic underscore markdown
     .trim();
 };
 
@@ -37,56 +40,100 @@ const fetchImageAsBlob = async (url) => {
 
 export const downloadAsWord = async (content, topic, images = []) => {
   try {
-    const sections = content.split(/(\n##\s+[^\n]+)/);
+    // Split by all heading levels (##, ###, ####, etc.) while preserving the headings
+    const sections = content.split(/(\n#{2,6}\s+[^\n]+)/);
     const docParagraphs = [];
     let sectionIndex = 0;
 
     sections.forEach((section) => {
-      if (section.match(/^##\s+/)) {
-        // This is a heading
-        const headingText = section.replace(/^##\s+/, '').trim();
+      // Check if this is a heading (##, ###, ####, etc.)
+      const headingMatch = section.match(/^(#{2,6})\s+(.+)/);
+      if (headingMatch) {
+        const headingLevel = headingMatch[1].length; // Number of # symbols
+        const headingText = headingMatch[2].trim();
         
-        // Check if there's an image for this section
-        const image = images.find(img => img.sectionIndex === sectionIndex);
-        sectionIndex++;
-        
-        if (image) {
-          docParagraphs.push(
-            new Paragraph({
-              text: headingText,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { after: 200, before: 200 },
-            })
-          );
+        // Determine HeadingLevel based on markdown level
+        let headingLevelType;
+        if (headingLevel === 2) {
+          headingLevelType = HeadingLevel.HEADING_2;
+        } else if (headingLevel === 3) {
+          headingLevelType = HeadingLevel.HEADING_3;
+        } else if (headingLevel === 4) {
+          headingLevelType = HeadingLevel.HEADING_4;
+        } else if (headingLevel === 5) {
+          headingLevelType = HeadingLevel.HEADING_5;
         } else {
-          docParagraphs.push(
-            new Paragraph({
-              text: headingText,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { after: 200, before: 200 },
-            })
-          );
+          headingLevelType = HeadingLevel.HEADING_6;
         }
+        
+        // Only check for images on main section headings (##)
+        if (headingLevel === 2) {
+          const image = images.find(img => img.sectionIndex === sectionIndex);
+          sectionIndex++;
+        }
+        
+        // All headings should be bold (handled by HeadingLevel styles)
+        docParagraphs.push(
+          new Paragraph({
+            text: headingText,
+            heading: headingLevelType,
+            spacing: { after: 200, before: 200 },
+          })
+        );
       } else if (section.trim()) {
-        // This is content
-        const cleaned = cleanText(section);
-        if (cleaned) {
-          const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 0);
-          const runs = sentences.map((sentence, index) => {
-            return new TextRun({
-              text: sentence.trim() + (index < sentences.length - 1 ? '. ' : ''),
-              size: 22,
-            });
-          });
-
-          docParagraphs.push(
-            new Paragraph({
-              children: runs,
-              spacing: { after: 200 },
-              alignment: AlignmentType.JUSTIFIED,
-            })
-          );
-        }
+        // This is content - split by lines to handle subheadings within
+        const lines = section.split(/\n/);
+        
+        lines.forEach((line) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
+          
+          // Check if this line is a heading
+          const lineHeadingMatch = trimmedLine.match(/^(#{2,6})\s+(.+)/);
+          if (lineHeadingMatch) {
+            const headingLevel = lineHeadingMatch[1].length;
+            const headingText = lineHeadingMatch[2].trim();
+            
+            let headingLevelType;
+            if (headingLevel === 2) {
+              headingLevelType = HeadingLevel.HEADING_2;
+            } else if (headingLevel === 3) {
+              headingLevelType = HeadingLevel.HEADING_3;
+            } else if (headingLevel === 4) {
+              headingLevelType = HeadingLevel.HEADING_4;
+            } else if (headingLevel === 5) {
+              headingLevelType = HeadingLevel.HEADING_5;
+            } else {
+              headingLevelType = HeadingLevel.HEADING_6;
+            }
+            
+            docParagraphs.push(
+              new Paragraph({
+                text: headingText,
+                heading: headingLevelType,
+                spacing: { after: 200, before: 200 },
+              })
+            );
+          } else {
+            // Regular content - ensure normal weight
+            const cleaned = cleanText(trimmedLine);
+            if (cleaned) {
+              docParagraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: cleaned,
+                      size: 22,
+                      bold: false, // Explicitly set body text to normal weight
+                    }),
+                  ],
+                  spacing: { after: 200 },
+                  alignment: AlignmentType.JUSTIFIED,
+                })
+              );
+            }
+          }
+        });
       }
     });
 
@@ -161,67 +208,129 @@ export const downloadAsPDF = async (content, topic, images = []) => {
     pdf.text(titleLines, margin, yPosition);
     yPosition += titleLines.length * 10 + 10;
 
-    // Parse content with sections
-    const sections = content.split(/(\n##\s+[^\n]+)/);
+    // Parse content with sections - handle all heading levels (##, ###, ####, etc.)
+    const sections = content.split(/(\n#{2,6}\s+[^\n]+)/);
     let sectionIndex = 0;
 
     sections.forEach((section) => {
-      if (section.match(/^##\s+/)) {
-        // This is a heading
+      // Check if this is a heading (##, ###, ####, etc.)
+      const headingMatch = section.match(/^(#{2,6})\s+(.+)/);
+      if (headingMatch) {
+        const headingLevel = headingMatch[1].length; // Number of # symbols
+        const headingText = headingMatch[2].trim();
+        
         if (yPosition > pageHeight - 30) {
           pdf.addPage();
           yPosition = margin;
         }
         
-        pdf.setFontSize(16);
+        // Set font size based on heading level (smaller for deeper levels)
+        if (headingLevel === 2) {
+          pdf.setFontSize(16);
+        } else if (headingLevel === 3) {
+          pdf.setFontSize(14);
+        } else if (headingLevel === 4) {
+          pdf.setFontSize(13);
+        } else {
+          pdf.setFontSize(12);
+        }
+        
+        // All headings should be bold
         pdf.setFont('helvetica', 'bold');
-        const headingText = section.replace(/^##\s+/, '').trim();
         const headingLines = pdf.splitTextToSize(headingText, maxWidth);
         pdf.text(headingLines, margin, yPosition);
-        yPosition += headingLines.length * 8 + 10;
+        yPosition += headingLines.length * (headingLevel === 2 ? 8 : 7) + 10;
         
-        // Check if there's an image for this section
-        const image = images.find(img => img.sectionIndex === sectionIndex);
-        sectionIndex++;
-        
-        if (image) {
-          try {
-            // Add image to PDF
-            const imgWidth = maxWidth;
-            const imgHeight = (imgWidth * 0.75); // Maintain aspect ratio
-            
-            if (yPosition + imgHeight > pageHeight - margin) {
-              pdf.addPage();
-              yPosition = margin;
+        // Check if there's an image for this section (only for main headings ##)
+        if (headingLevel === 2) {
+          const image = images.find(img => img.sectionIndex === sectionIndex);
+          sectionIndex++;
+          
+          if (image) {
+            try {
+              // Add image to PDF
+              const imgWidth = maxWidth;
+              const imgHeight = (imgWidth * 0.75); // Maintain aspect ratio
+              
+              if (yPosition + imgHeight > pageHeight - margin) {
+                pdf.addPage();
+                yPosition = margin;
+              }
+              
+              pdf.addImage(image.url, 'JPEG', margin, yPosition, imgWidth, imgHeight);
+              yPosition += imgHeight + 10;
+            } catch (error) {
+              console.error('Error adding image to PDF:', error);
+              // Continue without image if it fails
             }
-            
-            pdf.addImage(image.url, 'JPEG', margin, yPosition, imgWidth, imgHeight);
-            yPosition += imgHeight + 10;
-          } catch (error) {
-            console.error('Error adding image to PDF:', error);
-            // Continue without image if it fails
           }
         }
         
+        // Reset to normal font for body text
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'normal');
       } else if (section.trim()) {
-        // Regular content
-        const cleaned = cleanText(section);
-        if (cleaned) {
-          const lines = pdf.splitTextToSize(cleaned, maxWidth);
+        // Process content line by line to handle any embedded headings
+        const lines = section.split(/\n/);
+        
+        lines.forEach((line) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
           
-          lines.forEach((line) => {
-            if (yPosition > pageHeight - 20) {
+          // Check if this line is a heading
+          const lineHeadingMatch = trimmedLine.match(/^(#{2,6})\s+(.+)/);
+          if (lineHeadingMatch) {
+            const headingLevel = lineHeadingMatch[1].length;
+            const headingText = lineHeadingMatch[2].trim();
+            
+            if (yPosition > pageHeight - 30) {
               pdf.addPage();
               yPosition = margin;
             }
-            pdf.text(line, margin, yPosition);
-            yPosition += 7;
-          });
-          
-          yPosition += 5; // Space between paragraphs
-        }
+            
+            // Set font size based on heading level
+            if (headingLevel === 2) {
+              pdf.setFontSize(16);
+            } else if (headingLevel === 3) {
+              pdf.setFontSize(14);
+            } else if (headingLevel === 4) {
+              pdf.setFontSize(13);
+            } else {
+              pdf.setFontSize(12);
+            }
+            
+            // All headings should be bold
+            pdf.setFont('helvetica', 'bold');
+            const headingLines = pdf.splitTextToSize(headingText, maxWidth);
+            pdf.text(headingLines, margin, yPosition);
+            yPosition += headingLines.length * (headingLevel === 2 ? 8 : 7) + 10;
+            
+            // Reset to normal font
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'normal');
+          } else {
+            // Regular content - ensure it's always normal weight
+            const cleaned = cleanText(trimmedLine);
+            if (cleaned) {
+              // Explicitly set to normal font before rendering body text
+              pdf.setFont('helvetica', 'normal');
+              pdf.setFontSize(12);
+              
+              const textLines = pdf.splitTextToSize(cleaned, maxWidth);
+              
+              textLines.forEach((textLine) => {
+                if (yPosition > pageHeight - 20) {
+                  pdf.addPage();
+                  yPosition = margin;
+                }
+                pdf.text(textLine, margin, yPosition);
+                yPosition += 7;
+              });
+              
+              yPosition += 5; // Space between paragraphs
+            }
+          }
+        });
       }
     });
 

@@ -60,44 +60,88 @@ const BlogGenerator = () => {
   const renderBlogWithImages = () => {
     if (!blogContent) return null;
     
-    // Split content by main sections (## headings)
-    const parts = blogContent.split(/(##\s+[^\n]+)/);
+    // Split content by all heading levels (##, ###, ####, etc.)
+    const parts = blogContent.split(/(\n#{2,6}\s+[^\n]+)/);
     let sectionIndex = 0;
     const elements = [];
     
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       
-      if (part.match(/^##\s+/)) {
-        // This is a heading
-        const headingText = part.replace(/^##\s+/, '').trim();
-        const image = blogImages.find(img => img.sectionIndex === sectionIndex);
+      // Check if this is a heading (##, ###, ####, etc.)
+      const headingMatch = part.match(/^(#{2,6})\s+(.+)/);
+      if (headingMatch) {
+        const headingLevel = headingMatch[1].length; // Number of # symbols
+        const headingText = headingMatch[2].trim();
         
-        elements.push(
-          <div key={`section-${sectionIndex}`}>
-            {image && (
-              <div className="blog-image-container">
-                <img 
-                  src={image.url} 
-                  alt={image.description}
-                  className="blog-image"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
+        // Only check for images on main section headings (##)
+        if (headingLevel === 2) {
+          const image = blogImages.find(img => img.sectionIndex === sectionIndex);
+          sectionIndex++;
+          
+          elements.push(
+            <div key={`section-${sectionIndex - 1}`}>
+              {image && (
+                <div className="blog-image-container">
+                  <img 
+                    src={image.url} 
+                    alt={image.description}
+                    className="blog-image"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+              <h2 className="blog-section-heading">{headingText}</h2>
+            </div>
+          );
+        } else {
+          // Subheadings (###, ####, etc.) - use appropriate heading tag
+          const HeadingTag = headingLevel === 3 ? 'h3' : headingLevel === 4 ? 'h4' : headingLevel === 5 ? 'h5' : 'h6';
+          elements.push(
+            <HeadingTag key={`heading-${i}`} className="blog-section-heading blog-subheading">
+              {headingText}
+            </HeadingTag>
+          );
+        }
+      } else if (part.trim() && !part.match(/^#{2,6}\s+/)) {
+        // This is content (not a heading) - process line by line to handle embedded headings
+        const lines = part.split(/\n/);
+        const contentElements = [];
+        
+        lines.forEach((line, lineIndex) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
+          
+          // Check if this line is a heading
+          const lineHeadingMatch = trimmedLine.match(/^(#{2,6})\s+(.+)/);
+          if (lineHeadingMatch) {
+            const headingLevel = lineHeadingMatch[1].length;
+            const headingText = lineHeadingMatch[2].trim();
+            const HeadingTag = headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : headingLevel === 4 ? 'h4' : headingLevel === 5 ? 'h5' : 'h6';
+            contentElements.push(
+              <HeadingTag key={`line-heading-${lineIndex}`} className="blog-section-heading blog-subheading">
+                {headingText}
+              </HeadingTag>
+            );
+          } else {
+            // Regular content
+            contentElements.push(
+              <div key={`line-content-${lineIndex}`} className="blog-paragraph">
+                <pre className="blog-text">{trimmedLine}</pre>
               </div>
-            )}
-            <h2 className="blog-section-heading">{headingText}</h2>
-          </div>
-        );
-        sectionIndex++;
-      } else if (part.trim() && !part.match(/^##\s+/)) {
-        // This is content (not a heading)
-        elements.push(
-          <div key={`content-${i}`} className="blog-paragraph">
-            <pre className="blog-text">{part.trim()}</pre>
-          </div>
-        );
+            );
+          }
+        });
+        
+        if (contentElements.length > 0) {
+          elements.push(
+            <div key={`content-${i}`}>
+              {contentElements}
+            </div>
+          );
+        }
       }
     }
     

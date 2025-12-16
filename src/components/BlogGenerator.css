@@ -224,10 +224,59 @@
 .blog-section-heading {
   font-size: 1.5rem;
   color: #1a202c;
+  font-weight: 700; /* Bold for all headings */
+  margin: 24px 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e1e8ed;
+}
+
+/* Subheadings (h3, h4, h5, h6) - also bold */
+.blog-content-rendered h2.blog-section-heading {
+  font-size: 1.5rem;
   font-weight: 700;
   margin: 24px 0 16px 0;
   padding-bottom: 8px;
   border-bottom: 2px solid #e1e8ed;
+  color: #1a202c;
+}
+
+.blog-content-rendered h3,
+.blog-content-rendered h3.blog-section-heading,
+.blog-content-rendered h3.blog-subheading {
+  font-size: 1.25rem;
+  font-weight: 700; /* Bold for h3 subheadings */
+  margin: 20px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e1e8ed;
+  color: #1a202c;
+}
+
+.blog-content-rendered h4,
+.blog-content-rendered h4.blog-section-heading,
+.blog-content-rendered h4.blog-subheading {
+  font-size: 1.125rem;
+  font-weight: 700; /* Bold for h4 subheadings */
+  margin: 16px 0 10px 0;
+  padding-bottom: 4px;
+  color: #1a202c;
+}
+
+.blog-content-rendered h5,
+.blog-content-rendered h5.blog-section-heading,
+.blog-content-rendered h5.blog-subheading {
+  font-size: 1rem;
+  font-weight: 700; /* Bold for h5 subheadings */
+  margin: 14px 0 8px 0;
+  color: #1a202c;
+}
+
+.blog-content-rendered h6,
+.blog-content-rendered h6.blog-section-heading,
+.blog-content-rendered h6.blog-subheading {
+  font-size: 0.9375rem;
+  font-weight: 700; /* Bold for h6 subheadings */
+  margin: 12px 0 6px 0;
+  color: #1a202c;
 }
 
 .blog-paragraph {
@@ -242,6 +291,7 @@
   line-height: 1.75;
   color: #2d3748;
   margin: 0;
+  font-weight: 400; /* Explicitly set to normal weight for body text */
 }
 
 .loading {
