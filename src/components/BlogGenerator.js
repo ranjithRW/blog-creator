@@ -7,6 +7,7 @@ const BlogGenerator = () => {
   const [topic, setTopic] = useState('');
   const [pageCount, setPageCount] = useState(1);
   const [blogContent, setBlogContent] = useState('');
+  const [blogImages, setBlogImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,10 +25,12 @@ const BlogGenerator = () => {
     setLoading(true);
     setError('');
     setBlogContent('');
+    setBlogImages([]);
 
     try {
-      const content = await openaiService.generateBlog(topic.trim(), pageCount);
-      setBlogContent(content);
+      const result = await openaiService.generateBlog(topic.trim(), pageCount);
+      setBlogContent(result.content);
+      setBlogImages(result.images || []);
     } catch (err) {
       setError(err.message || 'Failed to generate blog. Please try again.');
     } finally {
@@ -38,7 +41,7 @@ const BlogGenerator = () => {
   const handleDownloadWord = async () => {
     if (!blogContent) return;
     try {
-      await downloadAsWord(blogContent, topic);
+      await downloadAsWord(blogContent, topic, blogImages);
     } catch (err) {
       setError('Failed to download Word document: ' + err.message);
     }
@@ -47,10 +50,58 @@ const BlogGenerator = () => {
   const handleDownloadPDF = async () => {
     if (!blogContent) return;
     try {
-      await downloadAsPDF(blogContent, topic);
+      await downloadAsPDF(blogContent, topic, blogImages);
     } catch (err) {
       setError('Failed to download PDF document: ' + err.message);
     }
+  };
+
+  // Render blog content with images
+  const renderBlogWithImages = () => {
+    if (!blogContent) return null;
+    
+    // Split content by main sections (## headings)
+    const parts = blogContent.split(/(##\s+[^\n]+)/);
+    let sectionIndex = 0;
+    const elements = [];
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      if (part.match(/^##\s+/)) {
+        // This is a heading
+        const headingText = part.replace(/^##\s+/, '').trim();
+        const image = blogImages.find(img => img.sectionIndex === sectionIndex);
+        
+        elements.push(
+          <div key={`section-${sectionIndex}`}>
+            {image && (
+              <div className="blog-image-container">
+                <img 
+                  src={image.url} 
+                  alt={image.description}
+                  className="blog-image"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+            <h2 className="blog-section-heading">{headingText}</h2>
+          </div>
+        );
+        sectionIndex++;
+      } else if (part.trim() && !part.match(/^##\s+/)) {
+        // This is content (not a heading)
+        elements.push(
+          <div key={`content-${i}`} className="blog-paragraph">
+            <pre className="blog-text">{part.trim()}</pre>
+          </div>
+        );
+      }
+    }
+    
+    return <div className="blog-content-rendered">{elements}</div>;
   };
 
   return (
@@ -118,7 +169,7 @@ const BlogGenerator = () => {
               </div>
             </div>
             <div className="blog-content">
-              <pre className="blog-text">{blogContent}</pre>
+              {renderBlogWithImages()}
             </div>
           </div>
         )}
@@ -126,7 +177,7 @@ const BlogGenerator = () => {
         {loading && (
           <div className="loading">
             <div className="spinner"></div>
-            <p>Generating your blog... This may take a moment.</p>
+            <p>Generating your blog with images... This may take a moment.</p>
           </div>
         )}
       </div>

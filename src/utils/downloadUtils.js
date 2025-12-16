@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, ImageRun, ExternalHyperlink, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 
@@ -23,38 +23,98 @@ const isHeading = (text) => {
   return cleaned.startsWith('#') || (cleaned.length < 100 && cleaned.split(' ').length < 15);
 };
 
-export const downloadAsWord = async (content, topic) => {
+// Helper function to fetch image as blob
+const fetchImageAsBlob = async (url) => {
   try {
-    const paragraphs = splitIntoParagraphs(content);
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return blob;
+  } catch (error) {
+    console.error('Error fetching image:', error);
+    return null;
+  }
+};
+
+export const downloadAsWord = async (content, topic, images = []) => {
+  try {
+    const sections = content.split(/(\n##\s+[^\n]+)/);
     const docParagraphs = [];
+    let sectionIndex = 0;
 
-    paragraphs.forEach((para) => {
-      const cleaned = cleanText(para);
-      if (isHeading(para)) {
-        // It's a heading
-        const headingText = cleaned.replace(/^#+\s*/, '');
-        docParagraphs.push(
-          new Paragraph({
-            text: headingText,
-            heading: para.startsWith('##') ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
-            spacing: { after: 200, before: 200 },
-          })
-        );
-      } else {
-        // Regular paragraph
-        const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const runs = sentences.map((sentence, index) => {
-          return new TextRun({
-            text: sentence.trim() + (index < sentences.length - 1 ? '. ' : ''),
-            size: 22,
+    sections.forEach((section) => {
+      if (section.match(/^##\s+/)) {
+        // This is a heading
+        const headingText = section.replace(/^##\s+/, '').trim();
+        
+        // Check if there's an image for this section
+        const image = images.find(img => img.sectionIndex === sectionIndex);
+        sectionIndex++;
+        
+        if (image) {
+          docParagraphs.push(
+            new Paragraph({
+              text: headingText,
+              heading: HeadingLevel.HEADING_2,
+              spacing: { after: 200, before: 200 },
+            })
+          );
+        } else {
+          docParagraphs.push(
+            new Paragraph({
+              text: headingText,
+              heading: HeadingLevel.HEADING_2,
+              spacing: { after: 200, before: 200 },
+            })
+          );
+        }
+      } else if (section.trim()) {
+        // This is content
+        const cleaned = cleanText(section);
+        if (cleaned) {
+          const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 0);
+          const runs = sentences.map((sentence, index) => {
+            return new TextRun({
+              text: sentence.trim() + (index < sentences.length - 1 ? '. ' : ''),
+              size: 22,
+            });
           });
-        });
 
-        docParagraphs.push(
+          docParagraphs.push(
+            new Paragraph({
+              children: runs,
+              spacing: { after: 200 },
+              alignment: AlignmentType.JUSTIFIED,
+            })
+          );
+        }
+      }
+    });
+
+    // Add images after their corresponding sections
+    // Note: docx library requires images to be added separately
+    // For now, we'll add image placeholders with links
+    const finalParagraphs = [...docParagraphs];
+    
+    // Insert images after headings (simplified approach)
+    images.forEach((image, idx) => {
+      const insertIndex = (image.sectionIndex * 2) + 1;
+      if (insertIndex < finalParagraphs.length) {
+        // Add image reference as hyperlink (docx image embedding is complex)
+        finalParagraphs.splice(insertIndex, 0, 
           new Paragraph({
-            children: runs,
+            children: [
+              new ExternalHyperlink({
+                children: [
+                  new TextRun({
+                    text: `[Image: ${image.description}]`,
+                    style: "Hyperlink",
+                  }),
+                ],
+                link: image.url,
+              }),
+            ],
             spacing: { after: 200 },
-            alignment: AlignmentType.JUSTIFIED,
+            alignment: AlignmentType.CENTER,
           })
         );
       }
@@ -71,7 +131,7 @@ export const downloadAsWord = async (content, topic) => {
               alignment: AlignmentType.CENTER,
               spacing: { after: 400 },
             }),
-            ...docParagraphs,
+            ...finalParagraphs,
           ],
         },
       ],
@@ -85,7 +145,7 @@ export const downloadAsWord = async (content, topic) => {
   }
 };
 
-export const downloadAsPDF = async (content, topic) => {
+export const downloadAsPDF = async (content, topic, images = []) => {
   try {
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -101,42 +161,67 @@ export const downloadAsPDF = async (content, topic) => {
     pdf.text(titleLines, margin, yPosition);
     yPosition += titleLines.length * 10 + 10;
 
-    // Add content
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'normal');
-    const paragraphs = splitIntoParagraphs(content);
+    // Parse content with sections
+    const sections = content.split(/(\n##\s+[^\n]+)/);
+    let sectionIndex = 0;
 
-    paragraphs.forEach((para) => {
-      const cleaned = cleanText(para);
-      
-      if (isHeading(para)) {
-        // Heading
+    sections.forEach((section) => {
+      if (section.match(/^##\s+/)) {
+        // This is a heading
         if (yPosition > pageHeight - 30) {
           pdf.addPage();
           yPosition = margin;
         }
+        
         pdf.setFontSize(16);
         pdf.setFont('helvetica', 'bold');
-        const headingText = cleaned.replace(/^#+\s*/, '');
+        const headingText = section.replace(/^##\s+/, '').trim();
         const headingLines = pdf.splitTextToSize(headingText, maxWidth);
         pdf.text(headingLines, margin, yPosition);
-        yPosition += headingLines.length * 8 + 5;
+        yPosition += headingLines.length * 8 + 10;
+        
+        // Check if there's an image for this section
+        const image = images.find(img => img.sectionIndex === sectionIndex);
+        sectionIndex++;
+        
+        if (image) {
+          try {
+            // Add image to PDF
+            const imgWidth = maxWidth;
+            const imgHeight = (imgWidth * 0.75); // Maintain aspect ratio
+            
+            if (yPosition + imgHeight > pageHeight - margin) {
+              pdf.addPage();
+              yPosition = margin;
+            }
+            
+            pdf.addImage(image.url, 'JPEG', margin, yPosition, imgWidth, imgHeight);
+            yPosition += imgHeight + 10;
+          } catch (error) {
+            console.error('Error adding image to PDF:', error);
+            // Continue without image if it fails
+          }
+        }
+        
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'normal');
-      } else {
-        // Regular paragraph
-        const lines = pdf.splitTextToSize(cleaned, maxWidth);
-        
-        lines.forEach((line) => {
-          if (yPosition > pageHeight - 20) {
-            pdf.addPage();
-            yPosition = margin;
-          }
-          pdf.text(line, margin, yPosition);
-          yPosition += 7;
-        });
-        
-        yPosition += 5; // Space between paragraphs
+      } else if (section.trim()) {
+        // Regular content
+        const cleaned = cleanText(section);
+        if (cleaned) {
+          const lines = pdf.splitTextToSize(cleaned, maxWidth);
+          
+          lines.forEach((line) => {
+            if (yPosition > pageHeight - 20) {
+              pdf.addPage();
+              yPosition = margin;
+            }
+            pdf.text(line, margin, yPosition);
+            yPosition += 7;
+          });
+          
+          yPosition += 5; // Space between paragraphs
+        }
       }
     });
 
